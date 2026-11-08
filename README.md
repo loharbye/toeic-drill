@@ -21,7 +21,7 @@ css/style.css          スタイル（ダークモード対応）
 js/app.js              アプリ本体
 sw.js                  オフライン用 Service Worker
 manifest.webmanifest   PWA 設定
-data/part5.json        Part 5 問題（現在 60問：文法36・語彙24）
+data/part5.json        Part 5 問題（現在 180問：文法111・語彙69）
 data/vocab.json        語彙（現在 100語）
 icons/                 アプリアイコン
 tools/check_data.py    問題データの形式チェック
