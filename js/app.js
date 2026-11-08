@@ -8,7 +8,7 @@ const VOCAB_INTERVALS = [1, 3, 7, 14, 30]; // 語彙：正解ごとに延ばす�
 const REVIEW_INTERVALS = [1, 3, 7];        // ミス復習：再出題の間隔（日）
 const REVIEW_CLEAR_STREAK = 3;             // 「確実」かつ正解がこの回数続いたら復習から外す
 const BACKUP_REMIND_DAYS = 14;
-const DEFAULT_SETTINGS = { vocabPerDay: 10, part5PerDay: 12, reviewLimit: 15 };
+const DEFAULT_SETTINGS = { vocabPerDay: 10, vocabNewPerDay: 3, part5PerDay: 12, reviewLimit: 15 };
 
 const CONFIDENCE = { sure: '確実', unsure: '迷った', guess: '勘' };
 const MISTAKE_REASONS = [
@@ -251,13 +251,10 @@ function buildSession(date, extra = false) {
   const st = state.settings;
   const items = [];
 
-  // 1. 語彙：期限の来た語を優先し、残りを新しい語で埋める
+  // 1. 語彙：期限の来た語（上限まで）＋新しい語
   if (!extra) {
-    const due = data.vocab
-      .filter((v) => state.vocab[v.id] && state.vocab[v.id].next <= date)
-      .sort((a, b) => state.vocab[a.id].next.localeCompare(state.vocab[b.id].next));
-    const fresh = data.vocab.filter((v) => !state.vocab[v.id]);
-    shuffle([...due, ...fresh].slice(0, st.vocabPerDay)).forEach((v) => items.push(buildVocabItem(v)));
+    const { due, fresh } = vocabPlan(date);
+    shuffle([...due, ...fresh]).forEach((v) => items.push(buildVocabItem(v)));
   }
 
   // 2. メイン：復習中の問題を除き、出題回数の少ない問題から
@@ -285,6 +282,22 @@ function dueReviewCount(date) {
 
 function dueVocabCount(date) {
   return Object.values(state.vocab).filter((v) => v.next && v.next <= date).length;
+}
+
+// 語彙の出題：期限の来た語を古い順に上限まで。復習を今日中に出しきれる日だけ新しい語を
+// vocabNewPerDay 語足す（復習が残っているのに新しい語を足すと、残りが日ごとに増え続けるため）。
+// 復習が上限に満たない日は、空いた枠も新しい語で埋める。
+function vocabPlan(date) {
+  const st = state.settings;
+  const dueAll = data.vocab
+    .filter((v) => state.vocab[v.id] && state.vocab[v.id].next <= date)
+    .sort((a, b) => state.vocab[a.id].next.localeCompare(state.vocab[b.id].next));
+  const due = dueAll.slice(0, st.vocabPerDay);
+  const newCount = dueAll.length > due.length ? 0 : st.vocabNewPerDay;
+  const fresh = data.vocab
+    .filter((v) => !state.vocab[v.id])
+    .slice(0, Math.max(newCount, st.vocabPerDay - due.length));
+  return { due, fresh };
 }
 
 /* =========================================================
@@ -333,13 +346,14 @@ function renderHome() {
       <button class="btn" data-action="extra">Part 5 をもう1セット</button>`;
   } else {
     const st = state.settings;
-    const vocabDue = Math.min(dueVocabCount(date), st.vocabPerDay);
+    const vocab = vocabPlan(date);
+    const vocabBacklog = dueVocabCount(date) - vocab.due.length;
     const reviewDue = dueReviewCount(date);
     const reviewTake = Math.min(reviewDue, st.reviewLimit);
     todayCard = `
       <h2>今日のドリル</h2>
       <ul class="plan">
-        <li><span>1. 語彙</span><span>${st.vocabPerDay}問${vocabDue ? `（うち復習 ${vocabDue}）` : ''}</span></li>
+        <li><span>1. 語彙</span><span>${vocab.due.length + vocab.fresh.length}問（復習 ${vocab.due.length}・新しい語 ${vocab.fresh.length}）${vocabBacklog > 0 ? `（残り ${vocabBacklog} は翌日以降）` : ''}</span></li>
         <li><span>2. Part 5</span><span>${st.part5PerDay}問</span></li>
         <li><span>3. ミス復習</span><span>${reviewTake}問${reviewDue > reviewTake ? `（残り ${reviewDue - reviewTake} は翌日以降）` : ''}</span></li>
       </ul>
@@ -685,7 +699,8 @@ function renderSettings() {
     <div class="topbar"><button class="icon-btn" data-action="home" aria-label="ホームへ">←</button><h1 style="margin:0">設定</h1></div>
     <div class="card">
       <h2>1日の問題数</h2>
-      ${field('vocabPerDay', '語彙', 1, 50)}
+      ${field('vocabPerDay', '語彙の復習（上限）', 1, 50)}
+      ${field('vocabNewPerDay', '語彙の新しい語', 0, 20)}
       ${field('part5PerDay', 'Part 5', 1, 50)}
       ${field('reviewLimit', 'ミス復習の上限', 1, 100)}
       <p class="sub">復習が上限を超えた分は、翌日以降に回ります。次のドリルから反映されます。</p>
