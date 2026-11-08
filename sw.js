@@ -1,6 +1,6 @@
 // オフライン対応：アプリ本体と問題データを事前にキャッシュする。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが削除される）。
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `toeic-drill-${CACHE_VERSION}`;
 const PRECACHE = [
   './',
