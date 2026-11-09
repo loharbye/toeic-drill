@@ -1,6 +1,6 @@
 // オフライン対応：アプリ本体と問題データを事前にキャッシュする。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが削除される）。
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `toeic-drill-${CACHE_VERSION}`;
 const PRECACHE = [
   './',
@@ -28,24 +28,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// キャッシュがあれば即返し、裏でネットワークから更新する（次回起動時に新しい版になる）
+// ネットワーク優先：つながる時は常に最新を取得してキャッシュも更新し、
+// オフラインの時だけキャッシュを返す（更新がスマホにすぐ反映されるように）。
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const network = fetch(req)
-        .then((res) => {
-          if (res.ok) cache.put(req, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      if (cached) {
-        event.waitUntil(network);
-        return cached;
+      try {
+        const res = await fetch(req, { cache: 'no-cache' });
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      } catch (e) {
+        const cached = await cache.match(req, { ignoreSearch: true });
+        if (cached) return cached;
+        throw e;
       }
-      return network;
     })
   );
 });
